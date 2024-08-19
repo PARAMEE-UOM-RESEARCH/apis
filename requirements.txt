@@ -1,0 +1,6 @@
+fastapi[all]
+uvicorn[standard]
+pymongo
+bcrypt
+pyjwt
+google-generativeai
