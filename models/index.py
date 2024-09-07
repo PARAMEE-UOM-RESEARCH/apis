@@ -2,6 +2,12 @@ import google.generativeai as genai
 from utils.index import env
 import requests
 from fastapi import HTTPException
+import json
+from bson import json_util, ObjectId
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 #THIS IS BASED ON GOOGLE LLM's
 def predict(query):
@@ -31,20 +37,32 @@ def chat(prompt, db):
    
         if not prompt:
             raise HTTPException(status_code=400, detail="Prompt cannot be empty")
-        payload = {
-            "prompt": {
-            "text": f"My name is {prompt.userName}. I'm a micro Entrepreneur. You are my assistant. Please answer this question '{prompt.text}'. It's best to respond to my message. Try to act assistant and casual rather than being very formal."
-            }
-        }
+        
+        genai.configure(api_key=os.environ["API_KEY"])
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(f"My name is {prompt.userName}. I'm a traveller. You are my assistant. Please answer this question '{prompt.text}'. It's best to respond to my message. Try to act assistant and casual rather than being very formal.")
 
-        response = requests.post(env('CHAT_MODEL') + '=AIzaSyD4z63UDBeKGjktRqd_N_SOEmFifQhJCm4',json=payload)
-        response = response.json()
-
-        chat_data = {"userId": prompt.userId, "user": prompt.text,  "assistant": response["candidates"][0]["output"]}
+        chat_data = {"userId": prompt.userId, "user": prompt.text,  "assistant": response.text}
         chat_collection.insert_one(chat_data)
         
-        return response["candidates"][0]["output"]
-    except:
+        return response.text
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+def recommendation(prompt, db):
+    try:
+   
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+        
+        genai.configure(api_key=os.environ["API_KEY"])
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(f"My name is {prompt.userName}. I'm a traveller. You are my assistant. Please rate this hotel and give recommendations by analysing this object '{prompt.text}'. It's best to respond to my message. Try to act assistant and casual rather than being very formal.")
+        
+        return response.text
+    except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 def getChats(userId, db):
@@ -77,3 +95,41 @@ def search_hotels(params, headers):
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Failed to fetch hotels")
+    
+def addToFavHotels(payload, userId, db): 
+    try:
+        fav_collection = db["fav"]
+        # Ensure payload is directly used if it's already a dictionary
+        fav_document = {
+            "userId": userId,
+            "hotel": payload
+        }
+        # Insert the document correctly
+        fav_collection.insert_one(fav_document)
+        return {"message": "Fav added successfully"}
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail="Failed to add to favorites")
+
+def getFavHotels(userId, db):
+    try:
+        fav_collection = db["fav"]
+        # Fetch documents from the collection
+        cursor = fav_collection.find({"userId": userId})
+        # Convert cursor to list
+        fav_list = list(cursor)
+        # Convert BSON to JSON serializable format
+        return json.loads(json_util.dumps(fav_list))
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail="Failed to fetch favorite hotels")
+    
+def deleteFavHotels(favId, db):
+    try:
+        fav_collection = db["fav"]
+        object_id = ObjectId(favId)
+        fav_collection.delete_one({"_id": object_id})
+        return {"message": "Fav Hotel Deleted"}
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail="Failed to delete favorite hotels")

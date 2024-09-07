@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from pydantic import BaseModel
@@ -7,7 +7,11 @@ import logging
 from typing import List
 import bcrypt
 from utils.index import generate_jwt_token, env
-from models.index import predict, chat, getChats, deleteChats, search_hotels
+from models.index import predict, chat, getChats, deleteChats, search_hotels, addToFavHotels, getFavHotels, deleteFavHotels, recommendation
+from dotenv import load_dotenv
+import json
+
+load_dotenv()
 
 app = FastAPI()
 app = FastAPI(swagger_ui_parameters={"syntaxHighlight": False}) #Enable Swagger UI
@@ -118,6 +122,14 @@ class Chat(BaseModel):
 async def chatBot(msg: Chat):
     return chat(msg, db)
 
+class Recommendation(BaseModel):
+     text: str
+     userName: str
+ 
+# Recommendation route
+@app.post("/recommendation/")
+async def recomm(msg: Recommendation):
+    return recommendation(msg, db)
 
 # Chat route
 @app.get("/chat/{userId}")
@@ -128,6 +140,22 @@ async def getChatsByUserId(userId):
 @app.delete("/chat/{userId}")
 async def deleteChatsByUserId(userId):
     return deleteChats(userId, db)
+
+class Fav(BaseModel):
+     hotel: str
+# Fav route
+@app.post("/add-to-fav/{userId}")
+async def addToFav(payload: Fav, userId, request: Request):
+    hotel_data = json.loads(payload.hotel)
+    return addToFavHotels(hotel_data, userId, db)
+
+@app.get("/get-fav/{userId}")
+async def getFav(userId):
+    return getFavHotels(userId, db)
+
+@app.delete("/delete-fav/{favId}")
+async def deleteFav(favId):
+    return deleteFavHotels(favId, db)
 
 @app.get("/hotels/searchByCoordinates")
 async def search_hotels_by_coordinates(
