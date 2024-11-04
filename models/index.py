@@ -6,8 +6,23 @@ import json
 from bson import json_util, ObjectId
 from dotenv import load_dotenv
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from pydantic import EmailStr
+from jinja2 import Template
+import traceback
+import datetime
 
 load_dotenv()
+
+def saveUser(profile, db):
+    try:
+        users_collection = db["users"]
+        users_collection.insert_one(profile)
+        return {"message": "Insert Successfully."}
+    except:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 #THIS IS BASED ON GOOGLE LLM's
 def predict(query):
@@ -133,3 +148,76 @@ def deleteFavHotels(favId, db):
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail="Failed to delete favorite hotels")
+
+def send_email(schema, db):
+    try:
+        sender_email = "codex.dev.m1@gmail.com"
+        sender_password = "ijihiuyxreexlirh"
+        subject= f'Booking Confirmation and Payment Receipt – {schema.hotel_name}'
+        
+        transaction_date = datetime.datetime.now().strftime("%Y/%m/%d")
+        transaction_time = datetime.datetime.now().strftime("%H:%M")
+        
+        with open("email-templates/payment-receipt.html", "r") as file:
+            template = Template(file.read())
+            html_content = template.render(
+                                            subject=subject,
+                                            customer_name=schema.customer_name,
+                                            hotel_name=schema.hotel_name,
+                                            city_in_trans=schema.city_in_trans,
+                                            checkin_from=schema.checkin_from,
+                                            checkin_until=schema.checkin_until,
+                                            checkout_from=schema.checkout_from,
+                                            checkout_until=schema.checkout_until,
+                                            total_amount=schema.total_amount,
+                                            currencycode=schema.currencycode,
+                                            composite_price_breakdown=schema.composite_price_breakdown.to_dict(schema.noOfDays),
+                                            bookedDate=schema.bookedDate,
+                                            bookedTime=schema.bookedTime,
+                                            transaction_date= transaction_date,
+                                            transaction_time= transaction_time,
+                                            noOfDays=schema.noOfDays
+                                        )
+
+        transactions_collection = db["transactions"]
+        transactions_collection.insert_one({
+                                            "subject": subject,
+                                            "customer_email": schema.customer_email,
+                                            "customer_name": schema.customer_name,
+                                            "hotel_name": schema.hotel_name,
+                                            "city_in_trans": schema.city_in_trans,
+                                            "checkin_from": schema.checkin_from,
+                                            "checkin_until": schema.checkin_until,
+                                            "checkout_from": schema.checkout_from,
+                                            "checkout_until": schema.checkout_until,
+                                            "total_amount": schema.total_amount,
+                                            "currencycode": schema.currencycode,
+                                            "composite_price_breakdown": schema.composite_price_breakdown.to_dict(schema.noOfDays),
+                                            "transaction_date": transaction_date,
+                                            "transaction_time": transaction_time,
+                                            "bookedDate":schema.bookedDate,
+                                            "bookedTime":schema.bookedTime,
+                                            "noOfDays": schema.noOfDays
+                                        })
+
+
+        # Create the email message
+        message = MIMEMultipart()
+        message["From"] = sender_email
+        message["To"] = schema.customer_email
+        message["Subject"] = subject
+        message.attach(MIMEText(html_content, "html"))
+
+        # Send the email
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()  # Secure the connection
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, message["To"], message.as_string())
+
+        return {"status": "success", "message": "Email sent successfully"}
+    except Exception as e:
+        # Print exception details
+        print(f"An error occurred: {str(e)}")
+        print("Traceback:")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Internal Server Error")

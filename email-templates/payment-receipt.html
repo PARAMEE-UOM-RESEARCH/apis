@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Receipt</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #333333;
+      }
+      p {
+        color: #666666;
+      }
+      .footer {
+        margin-top: 20px;
+        text-align: center;
+        color: #aaaaaa;
+        font-size: 12px;
+      }
+      .details {
+        margin: 20px 0;
+      }
+      .details table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .details table,
+      .details th,
+      .details td {
+        border: 1px solid #ddd;
+        padding: 8px;
+      }
+      .details th {
+        background-color: #f2f2f2;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Payment Receipt</h1>
+      <p>Dear {{ customer_name }},</p>
+      <p>
+        Thank you for your booking with <strong>{{ hotel_name }}</strong> {{
+        city_in_trans }}.
+      </p>
+
+      <div class="details">
+        <table>
+          <tr>
+            <th>Booking Details</th>
+            <th></th>
+          </tr>
+          <tr>
+            <td>Hotel Name</td>
+            <td>{{ hotel_name }}</td>
+          </tr>
+          <tr>
+            <td>Check-in</td>
+            <td>{{ checkin_from }} - {{ checkin_until }}</td>
+          </tr>
+          <tr>
+            <td>Check-out</td>
+            <td>{{ checkout_from }} - {{ checkout_until }}</td>
+          </tr>
+          <tr>
+            <td>Location</td>
+            <td>{{ city_in_trans }}</td>
+          </tr>
+          <tr>
+            <td>Booked Date</td>
+            <td>{{ bookedDate }}</td>
+          </tr>
+          <tr>
+            <td>Booked Time</td>
+            <td>{{ bookedTime }}</td>
+          </tr>
+          <tr>
+            <td>Transaction Date</td>
+            <td>{{ transaction_date }}</td>
+          </tr>
+          <tr>
+            <td>Transaction Time</td>
+            <td>{{ transaction_time }}</td>
+          </tr>
+          <tr>
+            <td>No of Days</td>
+            <td>{{ noOfDays}}</td>
+          </tr>
+          <tr>
+            <td>Per Day Price</td>
+            <td>{{ composite_price_breakdown.gross_amount / noOfDays}} {{ currencycode }}</td>
+          </tr>
+          <tr>
+            <td>Total Amount</td>
+            <td>
+              {{ composite_price_breakdown.gross_amount }} {{ currencycode }}
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <p>
+        If you have any questions, feel free to contact us. We look forward to
+        welcoming you to <strong>{{ hotel_name }}</strong> and wish you a
+        pleasant stay.
+      </p>
+
+      <p>Best regards,<br />VacationWay.com</p>
+
+      <div class="footer">
+        <p>&copy; 2024 VacationWay.com. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

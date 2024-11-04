@@ -1,13 +1,13 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
 from pymongo.errors import ConnectionFailure
 import logging
-from typing import List
+from typing import List, Optional
 import bcrypt
 from utils.index import generate_jwt_token, env
-from models.index import predict, chat, getChats, deleteChats, search_hotels, addToFavHotels, getFavHotels, deleteFavHotels, recommendation
+from models.index import predict, chat, getChats, deleteChats, search_hotels, addToFavHotels, getFavHotels, deleteFavHotels, recommendation, saveUser, send_email
 from dotenv import load_dotenv
 import json
 
@@ -45,15 +45,19 @@ except ConnectionFailure as e:
 # Select database and collection
 db = client["research-paramee"]
 users_collection = db["users"]
+admins_collection = db["admins"]
+transactions_collection = db["transactions"]
+favs_collection = db["fav"]
+chats_collection = db["chats"]
 
 # Define a Pydantic model for the user data
 class User(BaseModel):
     email: str
-    sub: str
+    id: str
     given_name: str
     family_name: str
     picture: str
-    type: str
+    verified_email: bool
 
 #============================================================================================================
 
@@ -66,42 +70,50 @@ async def read_root():
 async def register(user: User):
         # Check if the username already exists
         existing_user = users_collection.find_one({"email": user.email})
-        # Hash the password
-        hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
+
         if existing_user:
             logging.info(f"Username {user.email} already exists")
-            raise HTTPException(status_code=400, detail="Cannot create the account.")
+        else:  
+        # Insert the new user into the database                                                                                 
+            user_data = {"email": user.email, "id": user.id,  "given_name": user.given_name,
+                "family_name": user.family_name,
+                "picture": user.picture, "verified_email": user.verified_email}
+            saveUser(user_data, db)
+            logging.info(f"User {user.email} registered successfully with ID")
+        return True        
 
-        # Insert the new user into the database
-        user_data = {"email": user.email, "password": hashed_password,  "age": user.age,
-            "experience": user.experience,
-            "interests": user.interests, "type": user.type}
-        result = users_collection.insert_one(user_data)
-
-        logging.info(f"User {user.email} registered successfully with ID: {result.inserted_id}")
-        return {"message": "User registered successfully", "user_id": str(result.inserted_id)}
-
-# Define a Pydantic model for the login request
+# Define a Pydantic model for the admin login request
 class LoginRequest(BaseModel):
     email: str
     password: str
 
 # Login route
-@app.post("/login/")
+@app.post("/admin-login/")
 async def login(login_request: LoginRequest):
         # Find the user in the database
-        user = users_collection.find_one({"email": login_request.email})
-        print(user)
-        if user:
-            user['_id'] = str(user['_id'])
+        admin = admins_collection.find_one({"email": login_request.email})
+        print(admin)
+        if admin:
+            admin['_id'] = str(admin['_id'])
+            if not (login_request.password == admin["password"]):
+                raise HTTPException(status_code=401, detail="Invalid email or password")
         else:
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
-        # Generate JWT token
-        jwt_token = generate_jwt_token(user)
+        # If the username and password are correct, return a success message 
+        return {"message": "Login successful", "admin": admin}
 
-        # If the username and password are correct, return a success message along with the JWT token
-        return {"message": "Login successful", "token": jwt_token, "user": user}
+# get users route
+@app.get("/get-users/")
+async def get_users():
+    # Fetch all users
+    users = users_collection.find().sort({ "_id": -1 })
+    # Convert cursor to list of dictionaries and make it JSON serializable
+    users_list = []
+    for user in users:
+        user["_id"] = str(user["_id"])  # Convert ObjectId to string
+        users_list.append(user)
+    return {"users": users_list}
 
 
 class Query(BaseModel):
@@ -193,3 +205,111 @@ async def search_hotels_by_coordinates(
     }
     
     return search_hotels(params, headers)
+
+class PriceBreakdownItem:
+    def __init__(self, name, details, item_amount):
+        self.name = name
+        self.details = details
+        self.item_amount = item_amount
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "details": self.details,
+            "item_amount": self.item_amount
+        }
+
+class CompositePriceBreakdown:
+    def __init__(self, gross_amount, discounted_amount, currency, items: List[PriceBreakdownItem]):
+        self.gross_amount = gross_amount
+        self.discounted_amount = discounted_amount
+        self.currency = currency
+        self.items = items
+
+    @classmethod
+    def from_dict(cls, data):
+        items = [PriceBreakdownItem(**item) for item in data['items']]
+        return cls(
+            gross_amount=data['gross_amount'],
+            discounted_amount=data['discounted_amount'],
+            currency=data['currency'],
+            items=items
+        )
+        
+    def to_dict(self, noOfDays):
+        return {
+            "gross_amount": self.gross_amount * noOfDays,
+            "discounted_amount": self.discounted_amount,
+            "currency": self.currency,
+            "items": [item.to_dict() for item in self.items]  # Convert each PriceBreakdownItem to a dict
+        }
+
+class EmailTemplateSchema(BaseModel):
+    customer_name: str
+    hotel_name: str
+    city_in_trans: str
+    checkin_from: str
+    checkin_until: str
+    checkout_from: str
+    checkout_until: str
+    total_amount: float
+    currencycode: str
+    discounts_applied: Optional[float]
+    composite_price_breakdown: CompositePriceBreakdown
+    customer_email: EmailStr
+    bookedDate: str
+    bookedTime: str
+    noOfDays: int
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    # Validator for composite_price_breakdown
+    @field_validator('composite_price_breakdown', mode='before')
+    def validate_composite_price_breakdown(cls, value):
+        if isinstance(value, dict):
+            return CompositePriceBreakdown.from_dict(value)
+        elif isinstance(value, CompositePriceBreakdown):
+            return value
+        raise ValueError("Invalid format for composite_price_breakdown")
+    
+@app.post("/sendEmail")
+async def sendEmail(schema: EmailTemplateSchema):
+    # Ensure that composite_price_breakdown is correctly formatted as a CompositePriceBreakdown instance
+    schema.composite_price_breakdown = CompositePriceBreakdown.from_dict(schema.composite_price_breakdown) \
+        if isinstance(schema.composite_price_breakdown, dict) else schema.composite_price_breakdown
+    return send_email(schema, db)
+
+# get transactions
+@app.get("/get-transactions/")
+async def get_transactions():
+    # Fetch all transactions
+    transactions = transactions_collection.find().sort({ "_id": -1 })
+    # Convert cursor to list of dictionaries and make it JSON serializable
+    transactions_list = []
+    for transaction in transactions:
+        transaction["_id"] = str(transaction["_id"])  # Convert ObjectId to string
+        transactions_list.append(transaction)
+    return {"transactions": transactions_list}
+
+# get favourites
+@app.get("/get-favs/")
+async def get_favs():
+    # Fetch all favs
+    favs = favs_collection.find().sort({ "_id": -1 })
+    # Convert cursor to list of dictionaries and make it JSON serializable
+    favs_list = []
+    for fav in favs:
+        fav["_id"] = str(fav["_id"])  # Convert ObjectId to string
+        favs_list.append(fav)
+    return {"favs": favs_list}
+
+# get chats
+@app.get("/get-chats/")
+async def get_chats():
+    # Fetch all chats
+    chats = chats_collection.find().sort({ "_id": -1 })
+    # Convert cursor to list of dictionaries and make it JSON serializable
+    chats_list = []
+    for chat in chats:
+        chat["_id"] = str(chat["_id"])  # Convert ObjectId to string
+        chats_list.append(chat)
+    return {"chats": chats_list}
