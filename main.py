@@ -275,6 +275,13 @@ class EmailTemplateSchema(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+    
+@app.post("/sendEmail")
+async def sendEmail(schema: EmailTemplateSchema):
+    # Ensure that composite_price_breakdown is correctly formatted as a CompositePriceBreakdown instance
+    schema.composite_price_breakdown = CompositePriceBreakdown.from_dict(schema.composite_price_breakdown) \
+        if isinstance(schema.composite_price_breakdown, dict) else schema.composite_price_breakdown
+    return send_email(schema, db)
 
 # get transactions
 @app.get("/get-transactions/")
