@@ -10,6 +10,7 @@ from utils.index import generate_jwt_token, env
 from models.index import predict, chat, getChats, deleteChats, search_hotels, addToFavHotels, getFavHotels, deleteFavHotels, recommendation, saveUser, send_email
 from dotenv import load_dotenv
 import json
+from typing import TypeVar, Protocol, Generic, runtime_checkable
 
 load_dotenv()
 
@@ -206,6 +207,11 @@ async def search_hotels_by_coordinates(
     
     return search_hotels(params, headers)
 
+class Model(BaseModel):
+    """A base model that allows protocols to be used for fields."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
 class PriceBreakdownItem:
     def __init__(self, name, details, item_amount):
         self.name = name
@@ -219,7 +225,8 @@ class PriceBreakdownItem:
             "item_amount": self.item_amount
         }
 
-class CompositePriceBreakdown:
+@runtime_checkable
+class CompositePriceBreakdown(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     def __init__(self, gross_amount, discounted_amount, currency, items: List[PriceBreakdownItem]):
@@ -246,7 +253,7 @@ class CompositePriceBreakdown:
             "items": [item.to_dict() for item in self.items]  # Convert each PriceBreakdownItem to a dict
         }
 
-class EmailTemplateSchema(BaseModel):
+class EmailTemplateSchema(Model, Generic[D]):
     customer_name: str
     hotel_name: str
     city_in_trans: str
@@ -263,8 +270,7 @@ class EmailTemplateSchema(BaseModel):
     bookedTime: str
     noOfDays: int
     
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     # Validator for composite_price_breakdown
     @field_validator('composite_price_breakdown', mode='before')
     def validate_composite_price_breakdown(cls, value):
