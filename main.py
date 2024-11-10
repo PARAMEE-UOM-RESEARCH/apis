@@ -207,12 +207,10 @@ async def search_hotels_by_coordinates(
     return search_hotels(params, headers)
 
 class PriceBreakdownItem(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    def __init__(self, name, details, item_amount):
-        self.name = name
-        self.details = details
-        self.item_amount = item_amount
-
+    name: str
+    details: str
+    item_amount: float
+    
     def to_dict(self):
         return {
             "name": self.name,
@@ -220,14 +218,22 @@ class PriceBreakdownItem(BaseModel):
             "item_amount": self.item_amount
         }
 
+    class Config:
+        arbitrary_types_allowed = True
+
 class CompositePriceBreakdown(BaseModel):
-    def __init__(self, gross_amount, discounted_amount, currency, items: List[PriceBreakdownItem]):
-        self.gross_amount = gross_amount
-        self.discounted_amount = discounted_amount
-        self.currency = currency
-        self.items = items
-        
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    gross_amount: float
+    discounted_amount: float
+    currency: str
+    items: List[PriceBreakdownItem]
+    
+    def to_dict(self, noOfDays):
+        return {
+            "gross_amount": self.gross_amount * noOfDays,
+            "discounted_amount": self.discounted_amount,
+            "currency": self.currency,
+            "items": [item.to_dict() for item in self.items]  # Convert each PriceBreakdownItem to a dict
+        }
 
     @classmethod
     def from_dict(cls, data):
@@ -238,14 +244,9 @@ class CompositePriceBreakdown(BaseModel):
             currency=data['currency'],
             items=items
         )
-        
-    def to_dict(self, noOfDays):
-        return {
-            "gross_amount": self.gross_amount * noOfDays,
-            "discounted_amount": self.discounted_amount,
-            "currency": self.currency,
-            "items": [item.to_dict() for item in self.items]  # Convert each PriceBreakdownItem to a dict
-        }
+    
+    class Config:
+        arbitrary_types_allowed = True
 
 class EmailTemplateSchema(BaseModel):
     customer_name: str
@@ -264,8 +265,6 @@ class EmailTemplateSchema(BaseModel):
     bookedTime: str
     noOfDays: int
     
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    # Validator for composite_price_breakdown
     @field_validator('composite_price_breakdown', mode='before')
     def validate_composite_price_breakdown(cls, value):
         if isinstance(value, dict):
@@ -273,13 +272,9 @@ class EmailTemplateSchema(BaseModel):
         elif isinstance(value, CompositePriceBreakdown):
             return value
         raise ValueError("Invalid format for composite_price_breakdown")
-    
-@app.post("/sendEmail")
-async def sendEmail(schema: EmailTemplateSchema):
-    # Ensure that composite_price_breakdown is correctly formatted as a CompositePriceBreakdown instance
-    schema.composite_price_breakdown = CompositePriceBreakdown.from_dict(schema.composite_price_breakdown) \
-        if isinstance(schema.composite_price_breakdown, dict) else schema.composite_price_breakdown
-    return send_email(schema, db)
+
+    class Config:
+        arbitrary_types_allowed = True
 
 # get transactions
 @app.get("/get-transactions/")
