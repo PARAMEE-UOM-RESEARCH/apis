@@ -4,13 +4,12 @@ from pymongo import MongoClient
 from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
 from pymongo.errors import ConnectionFailure
 import logging
-from typing import List, Optional
+from typing import List, Optional, Any
 import bcrypt
 from utils.index import generate_jwt_token, env
 from models.index import predict, chat, getChats, deleteChats, search_hotels, addToFavHotels, getFavHotels, deleteFavHotels, recommendation, saveUser, send_email
 from dotenv import load_dotenv
 import json
-from typing import TypeVar, Protocol, Generic, runtime_checkable
 
 load_dotenv()
 
@@ -207,11 +206,6 @@ async def search_hotels_by_coordinates(
     
     return search_hotels(params, headers)
 
-class Model(BaseModel):
-    """A base model that allows protocols to be used for fields."""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    
 class PriceBreakdownItem:
     def __init__(self, name, details, item_amount):
         self.name = name
@@ -225,15 +219,15 @@ class PriceBreakdownItem:
             "item_amount": self.item_amount
         }
 
-@runtime_checkable
-class CompositePriceBreakdown(Protocol):
-    class Config:
-        arbitrary_types_allowed = True
+class CompositePriceBreakdown:
     def __init__(self, gross_amount, discounted_amount, currency, items: List[PriceBreakdownItem]):
         self.gross_amount = gross_amount
         self.discounted_amount = discounted_amount
         self.currency = currency
         self.items = items
+        
+    def __get_pydantic_core_schema__(self, handler: Any) -> dict:
+        return handler.generate_schema(dict)
 
     @classmethod
     def from_dict(cls, data):
@@ -270,7 +264,7 @@ class EmailTemplateSchema(BaseModel):
     bookedTime: str
     noOfDays: int
     
-    class Config: arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     # Validator for composite_price_breakdown
     @field_validator('composite_price_breakdown', mode='before')
     def validate_composite_price_breakdown(cls, value):
