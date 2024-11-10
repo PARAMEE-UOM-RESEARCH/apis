@@ -226,7 +226,7 @@ class PriceBreakdownItem:
         }
 
 @runtime_checkable
-class CompositePriceBreakdown(BaseModel):
+class CompositePriceBreakdown(Protocol):
     class Config:
         arbitrary_types_allowed = True
     def __init__(self, gross_amount, discounted_amount, currency, items: List[PriceBreakdownItem]):
@@ -253,7 +253,7 @@ class CompositePriceBreakdown(BaseModel):
             "items": [item.to_dict() for item in self.items]  # Convert each PriceBreakdownItem to a dict
         }
 
-class EmailTemplateSchema(Model, Generic[D]):
+class EmailTemplateSchema(BaseModel):
     customer_name: str
     hotel_name: str
     city_in_trans: str
@@ -270,7 +270,7 @@ class EmailTemplateSchema(Model, Generic[D]):
     bookedTime: str
     noOfDays: int
     
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    class Config: arbitrary_types_allowed = True
     # Validator for composite_price_breakdown
     @field_validator('composite_price_breakdown', mode='before')
     def validate_composite_price_breakdown(cls, value):
