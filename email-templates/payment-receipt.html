@@ -108,7 +108,7 @@
           <tr>
             <td>Total Amount</td>
             <td>
-              {{ composite_price_breakdown.gross_amount }} {{ currencycode }}
+              {{ composite_price_breakdown.gross_amount | round(2) }} {{ currencycode }}
             </td>
           </tr>
         </table>
