@@ -261,7 +261,8 @@ class EmailTemplateSchema(BaseModel):
     bookedTime: str
     noOfDays: int
     
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    class Config:
+        arbitrary_types_allowed = True
     # Validator for composite_price_breakdown
     @field_validator('composite_price_breakdown', mode='before')
     def validate_composite_price_breakdown(cls, value):
