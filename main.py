@@ -220,6 +220,8 @@ class PriceBreakdownItem:
         }
 
 class CompositePriceBreakdown:
+    class Config:
+        arbitrary_types_allowed = True
     def __init__(self, gross_amount, discounted_amount, currency, items: List[PriceBreakdownItem]):
         self.gross_amount = gross_amount
         self.discounted_amount = discounted_amount
