@@ -207,23 +207,27 @@ async def search_hotels_by_coordinates(
     return search_hotels(params, headers)
 
 class PriceBreakdownItem(BaseModel):
-    # Define fields here
-    name: str
-    details: str
-    item_amount: float
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    def __init__(self, name, details, item_amount):
+        self.name = name
+        self.details = details
+        self.item_amount = item_amount
 
-class CompositePriceBreakdownData(BaseModel):
-    gross_amount: float
-    discounted_amount: float
-    currency: str
-    items: List[PriceBreakdownItem]
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "details": self.details,
+            "item_amount": self.item_amount
+        }
 
-class CompositePriceBreakdown:
+class CompositePriceBreakdown(BaseModel):
     def __init__(self, gross_amount, discounted_amount, currency, items: List[PriceBreakdownItem]):
         self.gross_amount = gross_amount
         self.discounted_amount = discounted_amount
         self.currency = currency
         self.items = items
+        
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
     def from_dict(cls, data):
@@ -234,13 +238,13 @@ class CompositePriceBreakdown:
             currency=data['currency'],
             items=items
         )
-
+        
     def to_dict(self, noOfDays):
         return {
             "gross_amount": self.gross_amount * noOfDays,
             "discounted_amount": self.discounted_amount,
             "currency": self.currency,
-            "items": [item.dict() for item in self.items]
+            "items": [item.to_dict() for item in self.items]  # Convert each PriceBreakdownItem to a dict
         }
 
 class EmailTemplateSchema(BaseModel):
